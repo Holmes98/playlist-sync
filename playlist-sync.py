@@ -72,9 +72,10 @@ class AdbRemote(RemoteFS):
 
     def copy(self, src: Path, dst: Path) -> None:
         """Copy a local file to the remote"""
-        if src.is_dir():
-            return
         mtime = src.stat().st_mtime
+        if src.is_dir():
+            self.utime(dst, mtime)
+            return
         if src.suffix != dst.suffix:
             src = transcode(src, mtime)
         subprocess.run(self.adb_args +
@@ -83,11 +84,7 @@ class AdbRemote(RemoteFS):
                         str(dst).encode()],
                        check=True,
                        stdout=subprocess.DEVNULL)
-        utc_mtime = datetime.utcfromtimestamp(mtime).strftime('%Y%m%d%H%M.%S')
-        cmd_str = b' '.join(self.adb_args).decode() + \
-            ' shell su -c TZ=UTC busybox touch -t ' + \
-            '{} {}'.format(utc_mtime, self.QuoteV2(str(dst)))
-        subprocess.run(cmd_str, check=True)
+        self.utime(dst, mtime)
         if src.parent == tmpdir:
             src.unlink()
 
@@ -179,6 +176,13 @@ class AdbRemote(RemoteFS):
             if not good:
                 return False
         return True
+
+    def utime(self, dst: Path, mtime: int):
+        utc_mtime = datetime.utcfromtimestamp(mtime).strftime('%Y%m%d%H%M.%S')
+        cmd_str = b' '.join(self.adb_args).decode() + \
+            ' shell su -c TZ=UTC busybox touch -t ' + \
+            '{} {}'.format(utc_mtime, self.QuoteV2(str(dst)))
+        subprocess.run(cmd_str, check=True)
 
 
 def transcode(src: Path, mtime) -> Path:
