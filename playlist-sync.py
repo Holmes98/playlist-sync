@@ -31,7 +31,7 @@ class File():
 
 class RemoteFS():
 
-    def copy(self, src: Path, abspath: Path, mtime: int) -> None:
+    def copy(self, src: Path, abspath: PurePath) -> None:
         raise NotImplementedError
 
     def unlink(self, abspath: PurePath) -> None:
@@ -49,7 +49,7 @@ class LocalRemote(RemoteFS):
     def __init__(self) -> None:
         raise NotImplementedError
 
-    def copy(self, src: Path, abspath: Path, mtime: int) -> None:
+    def copy(self, src: Path, abspath: Path) -> None:
         """Copy a local file to the remote"""
         raise NotImplementedError
 
@@ -70,8 +70,9 @@ class AdbRemote(RemoteFS):
     def __init__(self, adb_args: List[bytes]) -> None:
         self.adb_args = adb_args
 
-    def copy(self, src: Path, dst: Path) -> None:
+    def copy(self, src: Path, dst: PurePosixPath) -> None:
         """Copy a local file to the remote"""
+        print(type(dst))
         mtime = src.stat().st_mtime
         if src.is_dir():
             self.utime(dst, mtime)
