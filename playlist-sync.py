@@ -8,8 +8,6 @@ from pathlib import Path, PurePosixPath, PurePath
 from typing import List, Tuple
 from functools import total_ordering
 
-tmpdir = Path(R"W:\Temp")
-
 
 @total_ordering
 class File():
@@ -200,9 +198,11 @@ with open("android.json") as fi:
 
 playlist_src = Path(js['playlist_src'])
 music_src = Path(js['music_src'])
+tmpdir = Path(js['tmp_dir'])
 
 assert playlist_src.is_dir()
 assert music_src.is_dir()
+assert tmpdir.is_dir()
 
 file_system = js['file_system']
 assert file_system in ['local', 'adb']
