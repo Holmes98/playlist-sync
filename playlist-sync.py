@@ -6,8 +6,25 @@ import ffmpeg
 from datetime import datetime
 from pathlib import Path, PurePosixPath, PurePath
 from typing import List, Tuple
+from functools import total_ordering
 
 tmpdir = Path(R"W:\Temp")
+
+
+@total_ordering
+class File():
+
+    def __init__(self, relpath: str, mtime: int, mode: int, srcpath=None):
+        self.relpath = relpath
+        self.mtime = mtime
+        self.mode = mode
+        self.srcpath = srcpath
+
+    def __lt__(self, other):
+        return self.relpath < other.relpath
+
+    def __eq__(self, other):
+        return self.relpath == other.relpath
 
 
 class RemoteFS():
@@ -95,10 +112,10 @@ class AdbRemote(RemoteFS):
                            check=True)
         stdout = r.stdout.decode().replace("\r", "")
         for line in stdout.rstrip().split('\n'):
+            relpath = str(PurePosixPath(line[17:-1]).relative_to(music_dst))
             mtime = int(line[:10])
             mode = int(line[11:15], base=16)
-            path = PurePosixPath(line[17:-1]).relative_to(music_dst)
-            result.append((path.as_posix(), mtime, mode))
+            result.append(File(relpath, mtime, mode))
         return result
 
     def QuoteV2(self, arg: str) -> str:
@@ -244,9 +261,11 @@ for i, path in enumerate(local):
     sortpath = path
     if transcode_files is True and sortpath.suffix in ['.flac']:
         sortpath = sortpath.with_suffix("." + transcode_format)
-    local[i] = (sortpath.as_posix(),
-                int(music_src.joinpath(path).stat().st_mtime),
-                music_src.joinpath(path))
+    stat_ = music_src.joinpath(path).stat()
+    local[i] = File(relpath=sortpath.as_posix(),
+                    mtime=int(stat_.st_mtime),
+                    mode=stat_.st_mode,
+                    srcpath=music_src.joinpath(path))
 
 remote = fs.listdir(music_dst)
 
@@ -256,32 +275,31 @@ remote.sort()
 total = len(local)
 
 while local or remote:
-    if not local or (remote and local[-1][0] < remote[-1][0]):
+    if not local or (remote and local[-1] < remote[-1]):
         print("({}/{}) ".format(total - len(local), total), end='')
-        print("deleting", remote[-1][0])
-        if stat.S_ISDIR(remote[-1][2]):
-            fs.rmdir(music_dst.joinpath(remote[-1][0]))
+        print("deleting", remote[-1].relpath)
+        if stat.S_ISDIR(remote[-1].mode):
+            fs.rmdir(music_dst.joinpath(remote[-1].relpath))
         else:
-            fs.unlink(music_dst.joinpath(remote[-1][0]))
+            fs.unlink(music_dst.joinpath(remote[-1].relpath))
         remote.pop()
-    elif not remote or local[-1][0] > remote[-1][0]:
-        if local[-1][2].is_dir():  # don't copy directories
+    elif not remote or local[-1] > remote[-1]:
+        if local[-1].srcpath.is_dir():  # don't copy directories
             local.pop()
             continue
         print("({}/{}) ".format(total - len(local), total), end='')
-        print("copying", local[-1][0])
-        fs.copy(local[-1][2], music_dst.joinpath(local[-1][0]))
+        print("copying", local[-1].relpath)
+        fs.copy(local[-1].srcpath, music_dst.joinpath(local[-1].relpath))
         local.pop()
-    elif local[-1][2].is_file() and abs(local[-1][1] - remote[-1][1]) > 60:
+    elif local[-1].srcpath.is_file() and abs(local[-1].mtime - remote[-1].mtime) > 60:
         print("({}/{}) ".format(total - len(local), total), end='')
-        print("updating", local[-1][0])
-        fs.copy(local[-1][2], music_dst.joinpath(local[-1][0]))
+        print("updating", local[-1].relpath)
+        fs.copy(local[-1].srcpath, music_dst.joinpath(local[-1].relpath))
         local.pop()
         remote.pop()
     else:
-        assert local[-1][0] == remote[-1][0]
-        assert local[-1][2].is_dir() or abs(local[-1][1] - remote[-1][1]) <= 60
-        # print(" matched", local[-1][0])
+        assert local[-1] == remote[-1]
+        # print(" matched", local[-1].srcpath)
         local.pop()
         remote.pop()
 
