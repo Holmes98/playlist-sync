@@ -21,10 +21,12 @@ class File():
         self.srcpath = srcpath
 
     def __lt__(self, other):
-        return self.relpath < other.relpath
+        return self.relpath < other.relpath or \
+            (self.relpath == other.relpath and self.mtime < other.mtime + 60)
 
     def __eq__(self, other):
-        return self.relpath == other.relpath
+        return self.relpath == other.relpath and \
+            abs(self.mtime - other.mtime) < 60
 
 
 class RemoteFS():
@@ -70,6 +72,8 @@ class AdbRemote(RemoteFS):
 
     def copy(self, src: Path, dst: Path) -> None:
         """Copy a local file to the remote"""
+        if src.is_dir():
+            return
         mtime = src.stat().st_mtime
         if src.suffix != dst.suffix:
             src = transcode(src, mtime)
@@ -275,7 +279,7 @@ remote.sort()
 total = len(local)
 
 while local or remote:
-    if not local or (remote and local[-1] < remote[-1]):
+    if not local or (remote and local[-1].relpath < remote[-1].relpath):
         print("({}/{}) ".format(total - len(local), total), end='')
         print("deleting", remote[-1].relpath)
         if stat.S_ISDIR(remote[-1].mode):
@@ -284,21 +288,15 @@ while local or remote:
             fs.unlink(music_dst.joinpath(remote[-1].relpath))
         remote.pop()
     elif not remote or local[-1] > remote[-1]:
-        if local[-1].srcpath.is_dir():  # don't copy directories
-            local.pop()
-            continue
         print("({}/{}) ".format(total - len(local), total), end='')
-        print("copying", local[-1].relpath)
+        if local[-1].relpath != remote[-1].relpath:
+            print("copying", local[-1].relpath)
+        else:
+            print("updating", local[-1].relpath)
+            remote.pop()
         fs.copy(local[-1].srcpath, music_dst.joinpath(local[-1].relpath))
         local.pop()
-    elif local[-1].srcpath.is_file() and abs(local[-1].mtime - remote[-1].mtime) > 60:
-        print("({}/{}) ".format(total - len(local), total), end='')
-        print("updating", local[-1].relpath)
-        fs.copy(local[-1].srcpath, music_dst.joinpath(local[-1].relpath))
-        local.pop()
-        remote.pop()
     else:
-        assert local[-1] == remote[-1]
         # print(" matched", local[-1].srcpath)
         local.pop()
         remote.pop()
