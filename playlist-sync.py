@@ -72,7 +72,6 @@ class AdbRemote(RemoteFS):
 
     def copy(self, src: Path, dst: PurePosixPath) -> None:
         """Copy a local file to the remote"""
-        print(type(dst))
         mtime = src.stat().st_mtime
         if src.is_dir():
             self.utime(dst, mtime)
@@ -233,6 +232,7 @@ covers = set()
 local = set()
 formats = set()
 
+# read playlists
 for playlist in js['playlists']:
     playlist_path = playlist_src.joinpath(playlist)
     assert playlist_path.is_file(), playlist_path + " not found!"
@@ -250,6 +250,7 @@ for playlist in js['playlists']:
                 directories.add(relpath.parent)
     print("Read", len(playlists[playlist]), 'items from', playlist)
 
+# locate cover files
 for path in directories:
     for coverfile in ['cover.jpg', 'cover.png']:
         coverpath = path.joinpath(coverfile)
@@ -266,6 +267,7 @@ local.update(songs)
 local.update(covers)
 local = list(local)
 
+# create File objects from local paths
 for i, path in enumerate(local):
     sortpath = path
     if transcode_files is True and sortpath.suffix in ['.flac']:
@@ -276,15 +278,16 @@ for i, path in enumerate(local):
                     mode=stat_.st_mode,
                     srcpath=music_src.joinpath(path))
 
-remote = fs.listdir(music_dst)
-
+remote = fs.listdir(music_dst)  # get all remote files
 local.sort()
 remote.sort()
-
 total = len(local)
 
+# perform the sync
+# iterate in reverse order to avoid deleting non-empty directories
 while local or remote:
     if not local or (remote and local[-1].relpath < remote[-1].relpath):
+        # file exists on remote but not local
         print("({}/{}) ".format(total - len(local), total), end='')
         print("deleting", remote[-1].relpath)
         if stat.S_ISDIR(remote[-1].mode):
@@ -292,7 +295,9 @@ while local or remote:
         else:
             fs.unlink(music_dst.joinpath(remote[-1].relpath))
         remote.pop()
+
     elif not remote or local[-1] > remote[-1]:
+        # file exists on local but not remote, or local file is newer
         print("({}/{}) ".format(total - len(local), total), end='')
         if local[-1].relpath != remote[-1].relpath:
             print("copying", local[-1].relpath)
@@ -301,11 +306,14 @@ while local or remote:
             remote.pop()
         fs.copy(local[-1].srcpath, music_dst.joinpath(local[-1].relpath))
         local.pop()
+
     else:
-        # print(" matched", local[-1].srcpath)
+        # file exists on both, and remote is newer or equal to local
         local.pop()
         remote.pop()
 
+
+# copy playlists
 for playlist in playlists:
     temppath = tmpdir.joinpath(playlist)
     with open(temppath, 'w', encoding='utf-8') as fo:
