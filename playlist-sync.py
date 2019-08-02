@@ -3,6 +3,7 @@ import stat
 import subprocess
 import json
 import ffmpeg
+import argparse
 from datetime import datetime
 from pathlib import Path, PurePosixPath, PurePath
 from typing import List, Tuple
@@ -194,7 +195,16 @@ class AdbRemote(RemoteFS):
 
 
 def main():
-    with open("android.json") as fi:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        'config_path',
+        metavar='config',
+        type=str,
+        help='path to the json configuration file'
+    )
+    args = parser.parse_args()
+
+    with open(args.config_path) as fi:
         js = json.loads(fi.read())
 
     playlist_src = Path(js['playlist_src'])
