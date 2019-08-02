@@ -202,6 +202,12 @@ def main():
         type=str,
         help='path to the json configuration file'
     )
+    parser.add_argument(
+        '--force-update',
+        action='store_true',
+        help='Always update files on the remote, even if '
+        'the remote file appears to be up-to-date.'
+    )
     args = parser.parse_args()
 
     with open(args.config_path) as fi:
@@ -309,7 +315,7 @@ def main():
                 fs.unlink(music_dst.joinpath(remote[-1].relpath))
             remote.pop()
 
-        elif not remote or local[-1] > remote[-1]:
+        elif args.force_update or not remote or local[-1] > remote[-1]:
             # file exists on local but not remote, or local file is newer
             print("({}/{}) ".format(total - len(local), total), end='')
             if local[-1].relpath != remote[-1].relpath:
