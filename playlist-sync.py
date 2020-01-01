@@ -4,6 +4,7 @@ import subprocess
 import json
 import ffmpeg
 import argparse
+import shutil
 from datetime import datetime
 from pathlib import Path, PurePosixPath, PurePath
 from typing import List, Tuple
@@ -54,23 +55,47 @@ class RemoteFS():
 
 class LocalRemote(RemoteFS):
 
-    def __init__(self) -> None:
-        raise NotImplementedError
+    def __init__(self, tmpdir: Path) -> None:
+        self.tmpdir = tmpdir
 
-    def copy(self, src: Path, abspath: Path) -> None:
+    def copy(self, src: Path, dst: Path) -> None:
         """Copy a local file to the remote"""
-        raise NotImplementedError
+        mtime = src.stat().st_mtime
+        if src.is_dir():
+            shutil.copystat(src, dst)
+            return
+        if src.suffix != dst.suffix:
+            src = self.transcode(src, mtime)
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        shutil.copy2(src, dst)
+        if src.parent == self.tmpdir:
+            src.unlink()
 
     def unlink(self, abspath: Path) -> None:
         """Delete a file from the remote"""
-        raise NotImplementedError
+        abspath.unlink()
 
     def rmdir(self, abspath: Path) -> None:
-        """Delete a directory from the remote"""
-        raise NotImplementedError
+        """Delete a directory from the remote.
+        The directory must be empty."""
+        abspath.rmdir()
 
     def listdir(self, abspath: Path) -> List[Tuple[str, int, int]]:
-        raise NotImplementedError
+        """Recursively list the contents of the remote directory.
+        Returns a list of tuples (relpath, mtime, mode)"""
+        result = self.listdir_absolute(abspath)
+        for file in result:
+            file.relpath = Path(file.relpath).relative_to(abspath).as_posix()
+        return result
+
+    def listdir_absolute(self, abspath: Path) -> List[Tuple[str, int, int]]:
+        result = []
+        for entry in os.scandir(abspath):
+            stat = entry.stat()
+            result.append(File(entry.path, int(stat.st_mtime), stat.st_mode))
+            if entry.is_dir():
+                result.extend(self.listdir_absolute(entry.path))
+        return result
 
 
 class AdbRemote(RemoteFS):
@@ -112,7 +137,8 @@ class AdbRemote(RemoteFS):
                        check=True)
 
     def listdir(self, abspath: PurePosixPath) -> List[Tuple[str, int, int]]:
-        """Recursively list the contents of the remote directory"""
+        """Recursively list the contents of the remote directory.
+        Returns a list of tuples (relpath, mtime, mode)"""
         result = []
         qpath = self.QuoteArgument(str(abspath).encode())
         r = subprocess.run(self.adb_args +
@@ -198,7 +224,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         'config_path',
-        metavar='config',
+        metavar='CONFIG',
         type=str,
         help='path to the json configuration file'
     )
@@ -226,8 +252,8 @@ def main():
 
     if file_system == 'local':
         playlist_dst = Path(js['playlist_dst'])
-        music_dst = Path(js['playlist_dst'])
-        fs = LocalRemote()
+        music_dst = Path(js['music_dst'])
+        fs = LocalRemote(tmpdir)
     if file_system == 'adb':
         playlist_dst = PurePosixPath(js['playlist_dst'])
         music_dst = PurePosixPath(js['music_dst'])
