@@ -344,7 +344,7 @@ def main():
         elif args.force_update or not remote or local[-1] > remote[-1]:
             # file exists on local but not remote, or local file is newer
             print("({}/{}) ".format(total - len(local), total), end='')
-            if local[-1].relpath != remote[-1].relpath:
+            if not remote or local[-1].relpath != remote[-1].relpath:
                 print("copying", local[-1].relpath)
             else:
                 print("updating", local[-1].relpath)
