@@ -143,12 +143,12 @@ class AdbRemote(RemoteFS):
         qpath = self.QuoteArgument(str(abspath).encode())
         r = subprocess.run(self.adb_args +
                            [b'shell', b'find', qpath,
-                            b"-exec stat -c '%Y %f %N' '{}' +"],
+                            b"-exec stat -c '%Y %f %n' '{}' +"],
                            stdout=subprocess.PIPE,
                            check=True)
         stdout = r.stdout.decode().replace("\r", "")
         for line in stdout.rstrip().split('\n'):
-            relpath = str(PurePosixPath(line[17:-1]).relative_to(abspath))
+            relpath = str(PurePosixPath(line[16:]).relative_to(abspath))
             mtime = int(line[:10])
             mode = int(line[11:15], base=16)
             result.append(File(relpath, mtime, mode))
