@@ -108,7 +108,6 @@ class AdbRemote(RemoteFS):
         """Copy a local file to the remote"""
         mtime = src.stat().st_mtime
         if src.is_dir():
-            self.utime(dst, mtime)
             return
         if src.suffix != dst.suffix:
             src = self.transcode(src, mtime)
@@ -118,7 +117,6 @@ class AdbRemote(RemoteFS):
                         str(dst).encode()],
                        check=True,
                        stdout=subprocess.DEVNULL)
-        self.utime(dst, mtime)
         if src.parent == self.tmpdir:
             src.unlink()
 
@@ -211,13 +209,6 @@ class AdbRemote(RemoteFS):
             if not good:
                 return False
         return True
-
-    def utime(self, dst: Path, mtime: int):
-        utc_mtime = datetime.utcfromtimestamp(mtime).strftime('%Y%m%d%H%M.%S')
-        cmd_str = b' '.join(self.adb_args).decode() + \
-            ' shell su -c TZ=UTC busybox touch -t ' + \
-            '{} {}'.format(utc_mtime, self.QuoteV2(str(dst)))
-        subprocess.run(cmd_str, check=True)
 
 
 def main():
