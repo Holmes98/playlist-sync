@@ -47,7 +47,7 @@ class RemoteFS():
         dst = self.tmpdir.joinpath(src.stem + "." + self.transcode_format)
         ffmpeg.input(str(src)) \
               .output(str(dst), id3v2_version=3, format=self.transcode_format,
-                      audio_bitrate=self.transcode_bitrate, loglevel='error') \
+                      loglevel='error', **self.transcode_args) \
               .run(overwrite_output=True)
         os.utime(dst, times=(mtime, mtime))
         return dst
@@ -256,9 +256,9 @@ def main():
     transcode_files = js['transcode']
     if transcode_files is True:
         transcode_format = js['transcode_format']
-        transcode_bitrate = js['transcode_bitrate']
+        transcode_args = js['transcode_args']
         fs.transcode_format = transcode_format
-        fs.transcode_bitrate = transcode_bitrate
+        fs.transcode_args = transcode_args
         assert transcode_format in ['mp3']
 
     playlists = {}
